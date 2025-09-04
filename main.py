@@ -126,23 +126,35 @@ logging.getLogger('urllib3').setLevel(logging.WARNING)
 file_lock = threading.Lock()
 show_browser = True
 
-def load_input_files():
-    """Tải tài khoản từ accounts.txt và proxy từ proxy.txt"""
+def generate_random_email():
+    """Tạo email ngẫu nhiên với domain @rakuten.jprakuten.jp"""
+    chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+    random_string = ''.join(random.choice(chars) for _ in range(10))
+    return f"{random_string}@rakuten.jprakuten.jp"
+
+def generate_accounts(num_accounts):
+    """Tạo tài khoản ngẫu nhiên với thông tin cố định"""
+    accounts = []
+    fixed_password = "123456aA@"
+    fixed_name = "Nguyen Van A"
+    fixed_japanese_name = "グエン ヴァン エー"
+    
+    for i in range(num_accounts):
+        email = generate_random_email()
+        accounts.append({
+            'email': email,
+            'password': fixed_password,
+            'name': fixed_name,
+            'name_japanese': fixed_japanese_name
+        })
+    
+    return accounts
+
+def load_input_files(num_accounts):
+    """Tạo tài khoản ngẫu nhiên và tải proxy từ proxy.txt"""
     try:
-        # Load accounts (email|password|name)
-        accounts = []
-        with open('accounts.txt', 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '|' in line:
-                    parts = line.split('|')
-                    if len(parts) >= 4:
-                        accounts.append({
-                            'email': parts[0].strip(),
-                            'password': parts[1].strip(),
-                            'name': parts[2].strip(),
-                            'name_japanese': parts[3].strip()
-                        })
+        # Generate random accounts
+        accounts = generate_accounts(num_accounts)
         
         # Load proxies (optional)
         proxies = []
@@ -169,15 +181,11 @@ def load_input_files():
         except FileNotFoundError:
             logging.warning("proxy.txt không tìm thấy. Chạy mà không dùng proxy.")
         
-        if not accounts:
-            logging.error("Không tìm thấy tài khoản hợp lệ trong accounts.txt")
-            raise ValueError("Không có tài khoản để xử lý")
-        
-        logging.info(f"Đã tải {len(accounts)} tài khoản và {len(proxies)} proxy")
+        logging.info(f"Đã tạo {len(accounts)} tài khoản và tải {len(proxies)} proxy")
         return accounts, proxies
     
     except Exception as e:
-        logging.error(f"Lỗi khi tải file đầu vào: {repr(e)}")
+        logging.error(f"Lỗi khi tạo tài khoản hoặc tải proxy: {repr(e)}")
         raise
 
 def wait_for_document_loaded(driver, timeout=10):
@@ -191,7 +199,7 @@ def wait_for_document_loaded(driver, timeout=10):
                 pass  # Driver might not be ready yet
             time.sleep(1)
         return False
-    
+
 def init_driver(proxy=None, email=None, row=0, col=0, size=(1366, 768)):
     """Khởi tạo Chrome driver với cài đặt không bị phát hiện"""
     options = uc.ChromeOptions()
@@ -469,36 +477,19 @@ def process_account(driver, account, account_index):
                 successful_accounts.append(account)
                 # Lưu tài khoản thành công
                 with open('successful_accounts.txt', 'a', encoding='utf-8') as f:
-                    f.write(f"{email}|{password}|{name}\n")
-                
-                # Remove successful email from accounts.txt
-                try:
-                    with open('accounts.txt', 'r', encoding='utf-8') as f:
-                        lines = f.readlines()
-                    
-                    with open('accounts.txt', 'w', encoding='utf-8') as f:
-                        for line in lines:
-                            if line.strip() and not line.startswith('#'):
-                                parts = line.strip().split('|')
-                                if len(parts) >= 1 and parts[0].strip() != email:
-                                    f.write(line)
-                            else:
-                                f.write(line)
-                    logging.info(f"Đã xóa {email} khỏi accounts.txt")
-                except Exception as e:
-                    logging.warning(f"Không thể xóa {email} khỏi accounts.txt: {e}")
+                    f.write(f"{email}|{password}|{name}|{name_japanese}\n")
             else:
                 failed_accounts.append({'account': account, 'error': message})
                 # Lưu tài khoản thất bại
                 with open('failed_accounts.txt', 'a', encoding='utf-8') as f:
-                    f.write(f"{email}|{password}|{name}|{message}\n")
+                    f.write(f"{email}|{password}|{name}|{name_japanese}|{message}\n")
         logging.info(f"Hoàn tất xử lý tài khoản: {email}")
     except Exception as e:
         logging.error(f"Lỗi xử lý tài khoản {email}: {repr(e)}")
         with file_lock:
             failed_accounts.append({'account': account, 'error': repr(e)})
             with open('failed_accounts.txt', 'a', encoding='utf-8') as f:
-                f.write(f"{email}|{password}|{name}|{repr(e)}\n")
+                f.write(f"{email}|{password}|{name}|{name_japanese}|{repr(e)}\n")
 
 def clean_all_user_data(retries=5, delay=1):
     """Dọn dẹp tất cả thư mục dữ liệu người dùng"""
@@ -556,8 +547,18 @@ def main():
     global show_browser
     
     try:
+        # Get number of accounts to generate
+        try:
+            num_accounts = int(input("Nhập số lượng tài khoản muốn tạo: "))
+            if num_accounts <= 0:
+                logging.warning("Số lượng tài khoản phải là số dương. Đặt mặc định là 1.")
+                num_accounts = 1
+        except ValueError:
+            logging.warning("Đầu vào không hợp lệ. Đặt mặc định là 1 tài khoản.")
+            num_accounts = 1
+        
         # Load input files
-        accounts, proxies = load_input_files()
+        accounts, proxies = load_input_files(num_accounts)
         
         # Clean previous user data
         clean_all_user_data()
