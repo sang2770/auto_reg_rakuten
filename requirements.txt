@@ -1,0 +1,7 @@
+selenium==4.15.0
+undetected-chromedriver==3.5.4
+requests==2.31.0
+pyautogui==0.9.54
+colorama==0.4.6
+chromedriver-autoinstaller==0.6.2
+psutil==5.9.6
