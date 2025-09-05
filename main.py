@@ -3,9 +3,7 @@ import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver import ActionChains
-from selenium.webdriver.support.ui import Select
 import json
 import base64
 import requests
@@ -14,11 +12,9 @@ import random
 import logging
 import threading
 from queue import Queue
-import re
 import os
 import pyautogui
 import colorama
-import uuid
 from datetime import datetime
 import signal
 import sys
@@ -26,8 +22,6 @@ import atexit
 import chromedriver_autoinstaller
 import psutil
 import shutil
-import platform
-import subprocess
 
 colorama.init()
 
@@ -51,7 +45,8 @@ def kill_child_processes(pid, sig=15):
             except Exception:
                 pass
     except Exception as e:
-        logging.warning(f"Không thể kill process con cho PID {pid}: {e}")
+        pass
+        # logging.warning(f"Không thể kill process con cho PID {pid}: {e}")
 
 def cleanup_drivers():
     """Dọn dẹp tất cả các WebDriver instances."""
@@ -433,7 +428,7 @@ def register_rakuten_account(driver, email, password, name, name_japanese):
                     continue
             
             if not submitted:
-                raise Exception("Không thể tìm thấy nút gửi")
+                raise Exception("Tài khoản không hợp lệ")
         submit_form()
         # Wait for redirect or success message
         time.sleep(10)
