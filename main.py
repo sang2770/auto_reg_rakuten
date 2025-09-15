@@ -22,6 +22,8 @@ import atexit
 import chromedriver_autoinstaller
 import psutil
 import shutil
+import uuid
+import socket
 
 colorama.init()
 
@@ -370,12 +372,12 @@ def register_rakuten_account(driver, email, password, name, name_japanese):
         # Fill name fields
         name_parts = name.split(' ', 1)
         first_name = name_parts[0] if len(name_parts) > 0 else name
-        last_name = name_parts[1] if len(name_parts) > 1 else ""
+        last_name = name_parts[1] if len(name_parts) > 1 else "A"
         
         # Fill name in Japanese
         name_japanese_parts = name_japanese.split(' ', 1)
         first_name_jp = name_japanese_parts[0] if len(name_japanese_parts) > 0 else name_japanese
-        last_name_jp = name_japanese_parts[1] if len(name_japanese_parts) > 1 else ""
+        last_name_jp = name_japanese_parts[1] if len(name_japanese_parts) > 1 else "アン"
         
         # Define field mappings
         field_mappings = [
@@ -515,9 +517,9 @@ def clean_all_user_data(retries=5, delay=1):
             logging.error(f"Không thể dọn dẹp dữ liệu người dùng sau {retries} lần thử.")
 
 
-GITHUB_TOKEN = "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"
+GITHUB_TOKEN = "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"
 API_URL = "https://api.github.com/repos/sang2770/storage/contents/trial.json"
-
+DEVICE_URL = "https://api.github.com/repos/sang2770/storage/contents/devices.txt"
 
 def get_current_keys():
     try:
@@ -544,7 +546,120 @@ def check_and_update():
     if not data:
         logging.error("Không thể lấy dữ liệu key từ GitHub.")
         return False
+    
+    # Check if device is blocked
+    mac_address = get_device_mac()
+    logging.info(f"MAC address của thiết bị: {mac_address}")
+    
+    devices, _ = get_devices_list()
+    if devices is None:
+        logging.warning("Không thể kiểm tra trạng thái chặn của thiết bị.")
+        return False
+    elif mac_address in devices:
+        block_flag = devices[mac_address]
+        if block_flag == 1:
+            logging.error(f"Thiết bị này ({mac_address}) đã bị chặn.")
+            return False
+    else:
+        add_device_to_list(mac_address)
+    
     return True
+
+def get_mac_address():
+    """Lấy địa chỉ MAC của thiết bị."""
+    try:
+        # Sử dụng socket để lấy địa chỉ MAC
+        mac = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff) for elements in range(0,2*6,2)][::-1])
+        return mac
+    except Exception as e:
+        logging.error(f"Lỗi khi lấy địa chỉ MAC: {repr(e)}")
+        return None
+
+def get_device_mac():
+    """Gets the device MAC address to use as a unique identifier"""
+    try:
+        # Try to get the first physical MAC address
+        mac = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff) 
+                        for elements in range(0, 8*6, 8)][::-1])
+        if mac != "ff:ff:ff:ff:ff:ff" and len(mac) == 17:
+            return mac
+    except:
+        pass
+    
+    # Fallback: Use a combination of hostname and a random UUID component
+    hostname = socket.gethostname()
+    random_component = str(uuid.uuid4())[:8]
+    return f"{hostname}-{random_component}"
+
+def get_devices_list():
+    """Gets the list of devices from GitHub"""
+    try:
+        headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json",
+            "Cache-Control": "no-cache"
+        }
+        response = requests.get(DEVICE_URL, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            # Decode base64 content
+            content = base64.b64decode(data['content']).decode('utf-8')
+            
+            # Parse the devices.txt content
+            devices = {}
+            for line in content.strip().split('\n'):
+                if line.strip():
+                    parts = line.strip().split('|')
+                    if len(parts) >= 2:
+                        mac_address = parts[0].strip()
+                        block_flag = int(parts[1].strip())
+                        devices[mac_address] = block_flag
+            return devices, data['sha']
+        else:
+            logging.error(f"Lỗi khi lấy devices.txt từ GitHub: {response.status_code}")
+    except Exception as e:
+        logging.error(f"Lỗi khi lấy danh sách thiết bị từ GitHub: {repr(e)}")
+    return None, None
+
+def add_device_to_list(mac_address):
+    """Adds the current device to the devices.txt list if it doesn't exist"""
+    try:
+        devices, sha = get_devices_list()
+        if devices is None:
+            # Create a new devices.txt file if it doesn't exist
+            devices = {}
+            sha = None
+        
+        if mac_address not in devices:
+            devices[mac_address] = 0  # Not blocked by default
+            
+            # Format content for devices.txt
+            content = "\n".join([f"{mac}|{block_flag}" for mac, block_flag in devices.items()])
+            
+            # Upload to GitHub
+            headers = {
+                "Authorization": f"token {GITHUB_TOKEN}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+            
+            data = {
+                "message": f"Add new device {mac_address[:8]}",
+                "content": base64.b64encode(content.encode()).decode(),
+            }
+            
+            if sha:
+                data["sha"] = sha
+            
+            response = requests.put(DEVICE_URL, headers=headers, json=data)
+            if response.status_code in [200, 201]:
+                return True
+            else:
+                logging.error(f"Lỗi khi thêm thiết bị vào GitHub: {response.status_code}, {response.text}")
+        else:
+            return True
+    except Exception as e:
+        logging.error(f"Lỗi khi thêm thiết bị vào danh sách: {repr(e)}")
+    return False
 
 def main():
     """Hàm chính"""
@@ -557,7 +672,7 @@ def main():
         # Clean previous user data
         clean_all_user_data()
         if not check_and_update():
-            logging.error("Phiên bản key không hợp lệ hoặc đã được sử dụng trên thiết bị khác. Vui lòng kiểm tra lại key.txt.")
+            logging.error("Phiên bản key không hợp lệ hoặc thiết bị đã bị chặn. Vui lòng liên hệ quản trị viên.")
             return
         # Get number of threads
         try:
