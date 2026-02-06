@@ -137,8 +137,10 @@ def load_input_files():
                         accounts.append({
                             'email': parts[0].strip(),
                             'password': parts[1].strip(),
-                            'name': parts[2].strip(),
-                            'name_japanese': parts[3].strip()
+                            'name_f': parts[2].strip(),
+                            'name_l': parts[3].strip(),
+                            'name_japanese_f': parts[4].strip(),
+                            'name_japanese_l': parts[5].strip()
                         })
         
         # Load proxies (optional)
@@ -306,7 +308,7 @@ def generate_random_birthdate():
     
     return birth_year, birth_month, birth_day
 
-def register_rakuten_account(driver, email, password, name, name_japanese):
+def register_rakuten_account(driver, email, password, account):
     """Đăng ký tài khoản Rakuten mới"""
     try:
         # Navigate to registration URL
@@ -370,14 +372,12 @@ def register_rakuten_account(driver, email, password, name, name_japanese):
             raise Exception("Không thể tìm thấy trường nhập mật khẩu")
         
         # Fill name fields
-        name_parts = name.split(' ', 1)
-        first_name = name_parts[0] if len(name_parts) > 0 else name
-        last_name = name_parts[1] if len(name_parts) > 1 else "A"
-        
+        first_name = account['name_f'] if account['name_f'] else "Nam"
+        last_name = account['name_l'] if account['name_l'] else "Nguyen"
+
         # Fill name in Japanese
-        name_japanese_parts = name_japanese.split(' ', 1)
-        first_name_jp = name_japanese_parts[0] if len(name_japanese_parts) > 0 else name_japanese
-        last_name_jp = name_japanese_parts[1] if len(name_japanese_parts) > 1 else "アン"
+        first_name_jp = account['name_japanese_f'] if account['name_japanese_f'] else "ナム"
+        last_name_jp = account['name_japanese_l'] if account['name_japanese_l'] else "グエン"
         
         # Define field mappings
         field_mappings = [
@@ -457,17 +457,16 @@ def register_rakuten_account(driver, email, password, name, name_japanese):
 
 def process_account(driver, account, account_index):
     """Xử lý đăng ký một tài khoản"""
-    email, password, name, name_japanese = account['email'], account['password'], account['name'], account['name_japanese'] 
+    email, password = account['email'], account['password']
     try:
         logging.info(f"Đang xử lý tài khoản {account_index + 1}: {email}")
-        success, message = register_rakuten_account(driver, email, password, name, name_japanese)
+        success, message = register_rakuten_account(driver, email, password, account)
         with file_lock:
             if success:
                 successful_accounts.append(account)
                 # Lưu tài khoản thành công
                 with open('successful_accounts.txt', 'a', encoding='utf-8') as f:
-                    f.write(f"{email}|{password}|{name}\n")
-                
+                    f.write(f"{email}|{password}|{account['name_f']}|{account['name_l']}|{account['name_japanese_f']}|{account['name_japanese_l']}\n")
                 # Remove successful email from accounts.txt
                 try:
                     with open('accounts.txt', 'r', encoding='utf-8') as f:
@@ -488,14 +487,14 @@ def process_account(driver, account, account_index):
                 failed_accounts.append({'account': account, 'error': message})
                 # Lưu tài khoản thất bại
                 with open('failed_accounts.txt', 'a', encoding='utf-8') as f:
-                    f.write(f"{email}|{password}|{name}|{message}\n")
+                    f.write(f"{email}|{password}|{account['name_f']}|{message}\n")
         logging.info(f"Hoàn tất xử lý tài khoản: {email}")
     except Exception as e:
         logging.error(f"Lỗi xử lý tài khoản {email}: {repr(e)}")
         with file_lock:
             failed_accounts.append({'account': account, 'error': repr(e)})
             with open('failed_accounts.txt', 'a', encoding='utf-8') as f:
-                f.write(f"{email}|{password}|{name}|{repr(e)}\n")
+                f.write(f"{email}|{password}|{account['name_f']}|{repr(e)}\n")
 
 def clean_all_user_data(retries=5, delay=1):
     """Dọn dẹp tất cả thư mục dữ liệu người dùng"""
@@ -516,151 +515,6 @@ def clean_all_user_data(retries=5, delay=1):
         else:
             logging.error(f"Không thể dọn dẹp dữ liệu người dùng sau {retries} lần thử.")
 
-
-GITHUB_TOKEN = "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"
-API_URL = "https://api.github.com/repos/sang2770/storage/contents/trial.json"
-DEVICE_URL = "https://api.github.com/repos/sang2770/storage/contents/devices.txt"
-
-def get_current_keys():
-    try:
-        headers = {
-            "Authorization": f"token {GITHUB_TOKEN}",
-            "Accept": "application/vnd.github.v3+json",
-            "Cache-Control": "no-cache"
-        }
-        response = requests.get(API_URL, headers=headers)
-        if response.status_code == 200:
-            data = response.json()
-            # Decode base64 content
-            content = base64.b64decode(data['content']).decode('utf-8')
-            return json.loads(content)
-        else:
-            logging.error(f"Lỗi khi lấy trial.json từ GitHub: {response.status_code}")
-    except Exception as e:
-        logging.error(f"Lỗi khi lấy dữ liệu từ GitHub: {repr(e)}")
-    return None
-
-def check_and_update():
-    data = get_current_keys()
-    logging.info("Đang kiểm tra key...")
-    if not data:
-        logging.error("Không thể lấy dữ liệu key từ GitHub.")
-        return False
-    
-    # Check if device is blocked
-    mac_address = get_device_mac()
-    logging.info(f"MAC address của thiết bị: {mac_address}")
-    
-    devices, _ = get_devices_list()
-    if devices is None:
-        logging.warning("Không thể kiểm tra trạng thái chặn của thiết bị.")
-        return False
-    elif mac_address in devices:
-        block_flag = devices[mac_address]
-        if block_flag == 1:
-            logging.error(f"Thiết bị này ({mac_address}) đã bị chặn.")
-            return False
-    else:
-        add_device_to_list(mac_address)
-    
-    return True
-
-def get_mac_address():
-    """Lấy địa chỉ MAC của thiết bị."""
-    try:
-        # Sử dụng socket để lấy địa chỉ MAC
-        mac = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff) for elements in range(0,2*6,2)][::-1])
-        return mac
-    except Exception as e:
-        logging.error(f"Lỗi khi lấy địa chỉ MAC: {repr(e)}")
-        return None
-
-def get_device_mac():
-    """Gets the device MAC address to use as a unique identifier"""
-    try:
-        # Try to get the first physical MAC address
-        mac = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff) 
-                        for elements in range(0, 8*6, 8)][::-1])
-        if mac != "ff:ff:ff:ff:ff:ff" and len(mac) == 17:
-            return mac
-    except:
-        pass
-    
-    # Fallback: Use a combination of hostname and a random UUID component
-    hostname = socket.gethostname()
-    random_component = str(uuid.uuid4())[:8]
-    return f"{hostname}-{random_component}"
-
-def get_devices_list():
-    """Gets the list of devices from GitHub"""
-    try:
-        headers = {
-            "Authorization": f"token {GITHUB_TOKEN}",
-            "Accept": "application/vnd.github.v3+json",
-            "Cache-Control": "no-cache"
-        }
-        response = requests.get(DEVICE_URL, headers=headers)
-        if response.status_code == 200:
-            data = response.json()
-            # Decode base64 content
-            content = base64.b64decode(data['content']).decode('utf-8')
-            
-            # Parse the devices.txt content
-            devices = {}
-            for line in content.strip().split('\n'):
-                if line.strip():
-                    parts = line.strip().split('|')
-                    if len(parts) >= 2:
-                        mac_address = parts[0].strip()
-                        block_flag = int(parts[1].strip())
-                        devices[mac_address] = block_flag
-            return devices, data['sha']
-        else:
-            logging.error(f"Lỗi khi lấy devices.txt từ GitHub: {response.status_code}")
-    except Exception as e:
-        logging.error(f"Lỗi khi lấy danh sách thiết bị từ GitHub: {repr(e)}")
-    return None, None
-
-def add_device_to_list(mac_address):
-    """Adds the current device to the devices.txt list if it doesn't exist"""
-    try:
-        devices, sha = get_devices_list()
-        if devices is None:
-            # Create a new devices.txt file if it doesn't exist
-            devices = {}
-            sha = None
-        
-        if mac_address not in devices:
-            devices[mac_address] = 0  # Not blocked by default
-            
-            # Format content for devices.txt
-            content = "\n".join([f"{mac}|{block_flag}" for mac, block_flag in devices.items()])
-            
-            # Upload to GitHub
-            headers = {
-                "Authorization": f"token {GITHUB_TOKEN}",
-                "Accept": "application/vnd.github.v3+json"
-            }
-            
-            data = {
-                "message": f"Add new device {mac_address[:8]}",
-                "content": base64.b64encode(content.encode()).decode(),
-            }
-            
-            if sha:
-                data["sha"] = sha
-            
-            response = requests.put(DEVICE_URL, headers=headers, json=data)
-            if response.status_code in [200, 201]:
-                return True
-            else:
-                logging.error(f"Lỗi khi thêm thiết bị vào GitHub: {response.status_code}, {response.text}")
-        else:
-            return True
-    except Exception as e:
-        logging.error(f"Lỗi khi thêm thiết bị vào danh sách: {repr(e)}")
-    return False
-
 def main():
     """Hàm chính"""
     global show_browser
@@ -671,9 +525,6 @@ def main():
         
         # Clean previous user data
         clean_all_user_data()
-        if not check_and_update():
-            logging.error("Phiên bản key không hợp lệ hoặc thiết bị đã bị chặn. Vui lòng liên hệ quản trị viên.")
-            return
         # Get number of threads
         try:
             num_threads = int(input("Nhập số luồng để chạy: "))
