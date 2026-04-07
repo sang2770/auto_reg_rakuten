@@ -1,0 +1,9 @@
+qwp00153@nifty.ne.jp|DOLCE8||Không lấy được input/src captcha từ shadow root
+qwp00153@nifty.ne.jp|DOLCE8||Không lấy được input/src captcha từ shadow root
+qwp00153@nifty.ne.jp|DOLCE8||Không lấy được input/src captcha từ shadow root
+qwp00153@nifty.ne.jp|DOLCE8||Không lấy được input/src captcha từ shadow root
+qwp00153@nifty.ne.jp|DOLCE8||Captcha sai và không thể làm mới captcha
+qwp00153@nifty.ne.jp|DOLCE8||Captcha vẫn sai sau khi giải lại và submit lại
+qwp00153@nifty.ne.jp|DOLCE8||Captcha vẫn sai sau khi giải lại và submit lại
+imura@dokidoki.ne.jp|imura723!!qQ||Không giải được captcha sau khi thử lại
+m-yosuke.5253@nifty.ne.jp|my5253||Captcha vẫn sai sau khi giải lại và submit lại

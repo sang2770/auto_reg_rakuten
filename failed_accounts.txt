@@ -1,3 +1,0 @@
-xuansang@gmail.com|123456aA@|Nguyen Van A|Exception('Không thể tìm thấy trường nhập email')
-xuansang@gmail.com|123456aA@|Nguyen Van A|Exception('Không thể tìm thấy nút gửi')
-xuansang@gmail.com|123456aA@|Nguyen Van A|Exception('Không thể tìm thấy nút gửi')
